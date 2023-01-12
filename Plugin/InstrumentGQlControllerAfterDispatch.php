@@ -5,10 +5,9 @@ use Magento\Framework\App\RequestInterface;
 use Magento\GraphQl\Controller\GraphQl;
 use Sentry\Tracing\SpanStatus;
 use Magento\Framework\Serialize\SerializerInterface;
-use MyVendor\MagentoSentry\Utils\Logger;
 
 class InstrumentGQlControllerAfterDispatch {
-    private $logger;
+ 
     private $jsonSerializer;
 
     public function __construct(
@@ -21,14 +20,13 @@ class InstrumentGQlControllerAfterDispatch {
         $activeTransaction = \Sentry\SentrySdk::getCurrentHub()->getSpan();
 
         if ($activeTransaction !== null){
-           //might not get accurate response codes from line below 
+            //A GraphQL API will return a 200 OK Status Code even in case of error.
             $activeTransaction->setStatus(SpanStatus::createFromHttpStatusCode($result->getHttpResponseCode()));
             $body = $this->jsonSerializer->unserialize($result->getBody());
            
-            //A GraphQL API will return a 200 OK Status Code even in case of error.
+           
             //https://spec.graphql.org/October2021/#sec-Errors.Error-result-format
             if(!isset($body->errors)){
-                //what is standary property access syntax?
                
                 foreach ($body['errors'] as $e){
                     
@@ -36,19 +34,22 @@ class InstrumentGQlControllerAfterDispatch {
                     $locations = $e['locations'] ?? '[]';
                     $ext = $e['extensions'] ?? '[]';
                     $data = $e['data'] ?? '[]';
+                    $path = $e['path'] ?? '[]'; 
 
-                    \Sentry\configureScope(function (\Sentry\State\Scope $scope) use ($locations,$ext,$data): void {
-                        $scope->setContext('Error Meta',[
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($message,$locations,$ext,$data,$path): void {
+                        $scope->setContext('GQL Error Meta',[
                             'locations' => $locations,
                             'extensions' => $ext,
-                            'data' => $data
+                            'data' => $data,    
+                            'path' => $path
                             ]);  
+                        $scope->setFingerprint([$message,'{{default}}']);
+                        \Sentry\captureException(new \Exception("$message"));
                     });
                     
-                    \Sentry\captureException(new \Exception("$message"));
+                    
                 }
             }
-           //is there a possibility for non finished transactions? Are these removed from scope? Would they persist between requests depending on web server implementation?
             $activeTransaction->finish();
         }
         return $result;

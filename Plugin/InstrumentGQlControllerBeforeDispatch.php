@@ -61,7 +61,7 @@ class InstrumentGQlControllerBeforeDispatch {
             $this->txnName = $this->data['operationName'];
         }else{
             //if no operation name should we look elsewhere?
-            // Can we guess based on AST traversal of gql object? Could add dependencies and assumptions based on said dependencies.
+            // Can we guess based on traversal pattern of gql object? Could add dependencies and assumptions based on said dependencies.
         }
 
         \Sentry\configureScope(function (\Sentry\State\Scope $scope) : void {
